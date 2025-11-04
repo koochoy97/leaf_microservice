@@ -1,12 +1,14 @@
 from fastapi import FastAPI, UploadFile, File, Form
 from fastapi.responses import StreamingResponse, JSONResponse
 from io import BytesIO
-from docx import Document
+import tempfile
 import json
 import unicodedata
 import re
+import os
+from docxtpl import DocxTemplate
 
-app = FastAPI(title="Leaf Services API")
+app = FastAPI(title="Leaf Services API (docxtpl version)")
 
 
 @app.post("/replace-word/")
@@ -15,7 +17,7 @@ async def replace_word(
     replacements: str = Form(...)
 ):
     """
-    Recibe un archivo Word (.docx) y reemplaza placeholders con valores.
+    Reemplaza placeholders en un DOCX usando docxtpl, preservando el formato.
     Ejemplo replacements:
     {"{{nombre}}": "Jaime", "{{pais}}": "México"}
     """
@@ -27,7 +29,7 @@ async def replace_word(
             content={"error": "El archivo debe ser un .docx válido"}
         )
 
-    # 2️⃣ Convertir el texto del form en JSON (diccionario)
+    # 2️⃣ Leer y parsear replacements
     try:
         replacements_dict = json.loads(replacements)
     except json.JSONDecodeError:
@@ -36,78 +38,45 @@ async def replace_word(
             content={"error": "El campo 'replacements' debe ser un JSON válido"}
         )
 
-    # 3️⃣ Leer contenido binario
+    # Limpieza: convertir {{pais}} → pais para docxtpl
+    context = {}
+    for k, v in replacements_dict.items():
+        clean = re.sub(r"^\{\{\s*|\s*\}\}$", "", k).strip()
+        context[clean] = v
+
+    # 3️⃣ Guardar archivo temporal
     content = await file.read()
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
 
-    # 4️⃣ Cargar documento Word desde memoria
-    doc = Document(BytesIO(content))
+    try:
+        # 4️⃣ Cargar plantilla y renderizar con docxtpl
+        doc = DocxTemplate(tmp_path)
+        doc.render(context)
 
-    # --- 🔁 FUNCIONES DE REEMPLAZO ROBUSTAS ---
-    def replace_in_paragraph(paragraph, replacements):
-        """Une los runs, reemplaza, y vuelve a escribir el texto en el párrafo."""
-        if not paragraph.runs:
-            return
+        # 5️⃣ Guardar el resultado en memoria
+        output = BytesIO()
+        doc.save(output)
+        output.seek(0)
 
-        full_text = "".join(run.text for run in paragraph.runs)
-        new_text = full_text
-        for key, value in replacements.items():
-            # Reemplazo directo
-            new_text = new_text.replace(key, str(value))
-            # Reemplazo flexible (por si hay espacios dentro de {{ }})
-            pattern = re.compile(r"\{\{\s*" + re.escape(key.strip("{} ")) + r"\s*\}\}")
-            new_text = pattern.sub(str(value), new_text)
+    except Exception as e:
+        return JSONResponse(
+            status_code=500,
+            content={"error": f"Error procesando documento: {str(e)}"}
+        )
+    finally:
+        os.remove(tmp_path)
 
-        if new_text != full_text:
-            # Escribir todo el texto en el primer run
-            paragraph.runs[0].text = new_text
-            for r in paragraph.runs[1:]:
-                r.text = ""
-
-    def replace_in_table(table, replacements):
-        for row in table.rows:
-            for cell in row.cells:
-                for p in cell.paragraphs:
-                    replace_in_paragraph(p, replacements)
-                # Tablas anidadas
-                for nested_table in cell.tables:
-                    replace_in_table(nested_table, replacements)
-
-    # --- 🔁 Reemplazar en párrafos principales ---
-    for p in doc.paragraphs:
-        replace_in_paragraph(p, replacements_dict)
-
-    # --- 🔁 Reemplazar dentro de todas las tablas (recursivo) ---
-    for table in doc.tables:
-        replace_in_table(table, replacements_dict)
-
-    # --- 🔁 Reemplazar en headers y footers ---
-    for section in doc.sections:
-        for p in section.header.paragraphs:
-            replace_in_paragraph(p, replacements_dict)
-        for t in section.header.tables:
-            replace_in_table(t, replacements_dict)
-        for p in section.footer.paragraphs:
-            replace_in_paragraph(p, replacements_dict)
-        for t in section.footer.tables:
-            replace_in_table(t, replacements_dict)
-
-    # 5️⃣ Guardar documento modificado en memoria
-    output = BytesIO()
-    doc.save(output)
-    output.seek(0)
-
-    # 6️⃣ Sanitizar nombre del archivo
+    # 6️⃣ Nombre limpio
     safe_filename = unicodedata.normalize("NFKD", f"modified_{file.filename}")
     safe_filename = safe_filename.encode("ascii", "ignore").decode("ascii")
     safe_filename = re.sub(r"[^A-Za-z0-9_.-]", "_", safe_filename)
 
-    print("\n📄 Archivo procesado correctamente:")
-    print(f"Reemplazos aplicados: {replacements_dict}")
-    print(f"Archivo devuelto: {safe_filename}")
-
-    # 7️⃣ Devolver archivo como descarga
+    # 7️⃣ Devolver DOCX como descarga
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         headers={"Content-Disposition": f"attachment; filename={safe_filename}"}
     )
+
