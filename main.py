@@ -1,45 +1,36 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from routers import replace_word, upload_videos, extract_frames
-from routers import videos_stream
+from fastapi.routing import APIRoute
+from routers import replace_word, upload_videos, extract_frames, videos_router
 
 app = FastAPI(title="Leaf Services API")
 
-# ✅ Habilitar CORS (incluye tu front local)
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "*"  # opcional: para permitir cualquier origen durante pruebas
-    ],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ✅ Montar carpetas estáticas (para servir los recursos)
+# ✅ Montar solo frames estáticos
 app.mount("/frames", StaticFiles(directory="frames"), name="frames")
-app.include_router(videos_stream.router)
 
-
-# ✅ Incluir routers
+# ✅ Registrar routers en orden (extract_frames antes por prioridad)
+app.include_router(extract_frames.router)
+app.include_router(videos_router.router)  # 🔥 aquí montas tu streaming con Range
 app.include_router(replace_word.router)
 app.include_router(upload_videos.router)
-app.include_router(extract_frames.router)
 
-# ✅ Endpoint raíz (útil para probar que el servidor corre)
 @app.get("/")
 def root():
-    return {
-        "message": "🌿 Leaf Services API running",
-        "routes": [
-            "/replace_word",
-            "/upload_videos",
-            "/extract_frames",
-            "/frames",
-            "/videos"
-        ]
-    }
+    return {"message": "🌿 Leaf Services API running"}
 
+# Debug opcional
+print("\n🧭 RUTAS REGISTRADAS EN FASTAPI:")
+for route in app.routes:
+    if isinstance(route, APIRoute):
+        print(f"➡️ {route.path} | métodos: {route.methods} | módulo: {route.endpoint.__module__}")
+print("========================================\n")
