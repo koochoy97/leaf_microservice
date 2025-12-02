@@ -1,15 +1,11 @@
 FROM python:3.11-slim
 
-# ----------------------------------------
-# 🔥 Instalar FFmpeg (tu parte original)
-# ----------------------------------------
+# Instalar FFmpeg
 RUN apt-get update && \
     apt-get install -y ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
-# ----------------------------------------
-# 🔥 Dependencias sistema para Playwright + Chromium
-# ----------------------------------------
+# Dependencias Playwright/Chromium
 RUN apt-get update && apt-get install -y \
     wget \
     curl \
@@ -33,34 +29,23 @@ RUN apt-get update && apt-get install -y \
     libxshmfence1 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# ----------------------------------------
-# 📌 Copiar solo requirements primero (mejor cache)
-# ----------------------------------------
-WORKDIR /app
-COPY requirements.txt .
+# Instalar solo playwright (python)
+RUN pip install playwright
 
-# ----------------------------------------
-# 🐍 Instalar dependencias Python (tu parte original)
-# ----------------------------------------
+# Instalar solo el navegador Chromium (SIN deps)
+RUN playwright install chromium
+
+# Directorio de trabajo
+WORKDIR /app
+
+# Copiar código
+COPY . /app
+
+# Instalar requirements
 RUN pip install --no-cache-dir -r requirements.txt
 
-# ----------------------------------------
-# 🔥 Instalar Playwright (Python) + Chromium (AQUÍ DEBE IR)
-# ----------------------------------------
-RUN pip install playwright
-RUN playwright install --with-deps chromium
-
-# ----------------------------------------
-# 📌 Copiar el resto del proyecto
-# ----------------------------------------
-COPY . .
-
-# ----------------------------------------
-# Exponer puerto (tu parte original)
-# ----------------------------------------
+# Exponer puerto
 EXPOSE 8000
 
-# ----------------------------------------
-# Comando de arranque (tu parte original)
-# ----------------------------------------
+# Comando de arranque
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
