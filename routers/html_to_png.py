@@ -20,20 +20,26 @@ async def convert_html_to_png(payload: HTMLPayload):
     html = payload.html
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch()
+        # 🔥 Usar chromium instalado por apt
+        browser = await p.chromium.launch(
+            executable_path="/usr/bin/chromium",
+            args=["--no-sandbox", "--disable-dev-shm-usage"]
+        )
+
         page = await browser.new_page(
             viewport={"width": 1070, "height": 1239},
-            device_scale_factor=2  # Retina
+            device_scale_factor=2  # MÁS NITIDEZ
         )
 
         await page.set_content(html)
 
-        # 🔥 Ajusta el tamaño del contenido al tamaño real tras renderizar
+        # Ajustar viewport al tamaño del contenido real
         width = await page.evaluate("document.documentElement.scrollWidth")
         height = await page.evaluate("document.documentElement.scrollHeight")
 
         await page.set_viewport_size({"width": width, "height": height})
 
+        # Captura PNG
         await page.screenshot(path=output_path)
 
         await browser.close()

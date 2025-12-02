@@ -1,12 +1,17 @@
 FROM python:3.11-slim
 
-# Instalar FFmpeg
+# ----------------------------------------
+# 🔥 Instalar FFmpeg (tu parte original)
+# ----------------------------------------
 RUN apt-get update && \
     apt-get install -y ffmpeg && \
     rm -rf /var/lib/apt/lists/*
 
-# Dependencias Playwright/Chromium
+# ----------------------------------------
+# 🔥 Dependencias necesarias para Chromium + Playwright
+# ----------------------------------------
 RUN apt-get update && apt-get install -y \
+    chromium \
     wget \
     curl \
     gnupg \
@@ -29,23 +34,24 @@ RUN apt-get update && apt-get install -y \
     libxshmfence1 \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# Instalar solo playwright (python)
+# ----------------------------------------
+# 🐍 Instalar Playwright (solo API, sin navegadores)
+# ----------------------------------------
 RUN pip install playwright
 
-# Instalar solo el navegador Chromium (SIN deps)
-RUN playwright install chromium
-
-# Directorio de trabajo
+# ----------------------------------------
+# 📁 Directorio de trabajo
+# ----------------------------------------
 WORKDIR /app
 
 # Copiar código
 COPY . /app
 
-# Instalar requirements
+# Instalar dependencias Python
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Exponer puerto
+# Exponer el puerto
 EXPOSE 8000
 
-# Comando de arranque
+# Arrancar FastAPI
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
