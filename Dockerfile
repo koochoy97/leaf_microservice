@@ -8,7 +8,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # ----------------------------------------
-# 🔥 Instalar dependencias del sistema para Playwright + Chromium
+# 🔥 Dependencias sistema para Playwright + Chromium
 # ----------------------------------------
 RUN apt-get update && apt-get install -y \
     wget \
@@ -34,28 +34,33 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # ----------------------------------------
-# 🔥 Instalar Playwright (solo Python API)
+# 📌 Copiar solo requirements primero (mejor cache)
 # ----------------------------------------
-RUN pip install playwright
+WORKDIR /app
+COPY requirements.txt .
 
 # ----------------------------------------
-# 🔥 Instalar Chromium dentro del contenedor
+# 🐍 Instalar dependencias Python (tu parte original)
 # ----------------------------------------
+RUN pip install --no-cache-dir -r requirements.txt
+
+# ----------------------------------------
+# 🔥 Instalar Playwright (Python) + Chromium (AQUÍ DEBE IR)
+# ----------------------------------------
+RUN pip install playwright
 RUN playwright install --with-deps chromium
 
 # ----------------------------------------
-# Directorio de trabajo (tu parte original)
+# 📌 Copiar el resto del proyecto
 # ----------------------------------------
-WORKDIR /app
+COPY . .
 
-# Copiar código (tu parte original)
-COPY . /app
-
-# Instalar dependencias Python (tu parte original)
-RUN pip install --no-cache-dir -r requirements.txt
-
+# ----------------------------------------
 # Exponer puerto (tu parte original)
+# ----------------------------------------
 EXPOSE 8000
 
+# ----------------------------------------
 # Comando de arranque (tu parte original)
+# ----------------------------------------
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
