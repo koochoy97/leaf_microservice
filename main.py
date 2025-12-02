@@ -5,7 +5,6 @@ from fastapi.routing import APIRoute
 from routers import replace_word, upload_videos, extract_frames, videos_router
 from routers import html_to_png
 
-
 app = FastAPI(title="Leaf Services API")
 
 # CORS
@@ -20,13 +19,15 @@ app.add_middleware(
 # ✅ Montar solo frames estáticos
 app.mount("/frames", StaticFiles(directory="frames"), name="frames")
 
+# ✅ 🔥 AGREGADO: servir imágenes generadas por html-to-png
+app.mount("/generated_png", StaticFiles(directory="generated_png"), name="generated_png")
+
 # ✅ Registrar routers en orden (extract_frames antes por prioridad)
 app.include_router(extract_frames.router)
-app.include_router(videos_router.router)  # 🔥 aquí montas tu streaming con Range
+app.include_router(videos_router.router)  # streaming con Range
 app.include_router(replace_word.router)
 app.include_router(upload_videos.router)
 app.include_router(html_to_png.router)
-
 
 @app.get("/")
 def root():
@@ -38,3 +39,4 @@ for route in app.routes:
     if isinstance(route, APIRoute):
         print(f"➡️ {route.path} | métodos: {route.methods} | módulo: {route.endpoint.__module__}")
 print("========================================\n")
+
